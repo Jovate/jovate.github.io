@@ -967,12 +967,14 @@ const KEY = 'bloblab_v2';
 const DEF = {coins: 50, total: 0, runTotal: 0, gems: 5, ranches: [{blobs: [1, 1], boxes: [], runMax: 1, bought: {}, up: {}}], unl: 1, cur: 0, disc: {}, up: {}, perks: {}, stars: 0,
   st: {merges: 0, boxes: 0, golden: 0, taps: 0}, ach: {}, sound: true, vibe: true, lastSeen: 0, boostUntil: 0, freeBoxAt: 0, freeGemsAt: 0,
   lastDaily: '', streak: 0, noAds: false, firstSeen: 0, playSec: 0, prestiges: 0, tut: false, bookTab: 0, upgTab: 0,
-  deep: false, autoOn: true, robotOn: true, pet: null, love: 0, mgAt: 0, iapTx: [], spend: [], starter: false, music: true, fx: true, sci: false, pops: true, codes: [], dev: false};
+  deep: false, autoOn: true, robotOn: true, pet: null, love: 0, loves: {}, mgAt: 0, iapTx: [], spend: [], starter: false, music: true, fx: true, sci: false, pops: true, codes: [], dev: false};
 let S;
 const RAW0 = (() => { try { return localStorage.getItem(KEY); } catch (e) { return null; } })();
 const FRESH = !RAW0;   // no había partida en este móvil: puede venir de una copia de seguridad
 try { S = Object.assign({}, DEF, JSON.parse(RAW0 || '{}')); } catch (e) { S = Object.assign({}, DEF); }
-for (const k of ['up', 'perks', 'disc', 'ach']) S[k] = Object.assign({}, S[k] || {});
+for (const k of ['up', 'perks', 'disc', 'ach', 'loves']) S[k] = Object.assign({}, S[k] || {});
+// v12.1: antes había un único contador de cariño; se lo quedamos a la mascota que estuviera elegida
+if (typeof S.love === 'number' && S.love > 0 && S.pet) { const k0 = S.pet.r + ':' + S.pet.lv; if (!S.loves[k0]) S.loves[k0] = S.love; S.love = 0; }
 // v4: mejoras propias de cada mundo. Las partidas antiguas pasan sus mejoras al primer rancho.
 if (S.ranches && S.ranches[0] && !S.ranches[0].up) { const old = S.up || {}; S.ranches.forEach((rd, i) => { rd.up = {}; if (!i) for (const k in old) if (k !== 'nap') rd.up[k] = old[k]; }); S.up = {nap: old.nap || 0}; }
 S.skins = Array.isArray(S.skins) ? [...S.skins] : ['classic', 'none']; S.skinC = S.skinC || 'classic'; S.skinA = S.skinA || 'none'; S.skinT = S.skinT || 'none';
@@ -1814,15 +1816,19 @@ const pk = k => 0; // v8: las ventajas estelares se sustituyen por la tienda de 
 const slots = (r = S.cur) => upV('space', r);
 const boostOn = () => Date.now() < S.boostUntil;
 const rebirthM = (n = S.prestiges) => 1 + 0.5 * n; // cada renacimiento: +30 % de ganancias para siempre
-// la mascota da como mucho un +10%: es cariño, no un atajo
-const petM = () => 1 + Math.min(0.1, (S.love || 0) * 0.00025);
-const petPct = () => Math.round(Math.min(10, (S.love || 0) * 0.025) * 10) / 10;
+// cada blob guarda su propio cariño; el bonus es el de la mascota que lleves puesta, como mucho +10%
+const petKey = p => p ? p.r + ':' + p.lv : '';
+const petLove = p => (S.loves || {})[petKey(p || S.pet)] || 0;
+const petM = () => 1 + Math.min(0.1, petLove() * 0.00025);
+const petPct = p => Math.round(Math.min(10, petLove(p) * 0.025) * 10) / 10;
 const isPet = (ri, lv) => !!(S.pet && S.pet.r === ri && S.pet.lv === lv);
 function setPet(b) {
   if (isPet(S.cur, b.lv)) { popT('❤', b.x, b.y - rad(b.lv) * 1.4, '#ff5a8a', 22); toast(T.petAlready); return; }
-  S.pet = {r: S.cur, lv: b.lv}; S.love = S.love || 0; save();
+  S.pet = {r: S.cur, lv: b.lv}; save();
   popT('❤', b.x, b.y - rad(b.lv) * 1.4, '#ff5a8a', 26); burst(b.x, b.y, '#ff6fa8', 14, U * 2, 0.6, 3);
-  Snd.buy(); buzz('med'); toast(T.petSet.replace('{n}', spName(S.cur, b.lv)));
+  Snd.buy(); buzz('med');
+  const prev = petLove();
+  toast(T.petSet.replace('{n}', spName(S.cur, b.lv)) + (prev ? ` · ❤ ${prev} (+${petPct()}%)` : ''));
 }
 const multBase = () => (1 + 0.25 * pk('pIncome')) * rebirthM() * petM();
 const mult = () => multBase() * (boostOn() ? 2 : 1) * (G.frenzyT > 0 ? 5 : 1) * (G.ev && G.ev.k === 'happy' ? 3 : 1);
@@ -2086,7 +2092,9 @@ function ensureRanch(ri) {
 function tapBlob(b) {
   const g = income(S.cur, b.lv) * labM(S.cur) * mult() * upV('tap') * (1 + pk('pTap'));
   addCoins(g); b.sq = 0.6; Snd.gem(); buzz('light'); S.st.taps++;
-  if (isPet(S.cur, b.lv) && S.love < 400) { S.love++; if (S.love % 10 === 0) popT('❤ +' + petPct() + '%', b.x, b.y - rad(b.lv) * 1.9, '#ff5a8a', 15); else popT('❤', b.x + rad(b.lv) * 0.7, b.y - rad(b.lv), '#ff8fb5', 13); }
+  if (isPet(S.cur, b.lv)) { const k0 = petKey(S.pet), v0 = (S.loves[k0] || 0);
+    if (v0 < 400) { S.loves[k0] = v0 + 1; if (S.loves[k0] % 10 === 0) popT('❤ +' + petPct() + '%', b.x, b.y - rad(b.lv) * 1.9, '#ff5a8a', 15); else popT('❤', b.x + rad(b.lv) * 0.7, b.y - rad(b.lv), '#ff8fb5', 13); }
+    else popT('❤', b.x + rad(b.lv) * 0.7, b.y - rad(b.lv), '#ffd0e0', 13); }
   popT('+' + fmt(g), b.x, b.y - rad(b.lv) * 1.2, '#ffd23c', 17, COIN); flyCoins(b.x, b.y - rad(b.lv) * 0.5, 3);
   burst(b.x, b.y - rad(b.lv) * 0.5, '#ff8fab', 4, U * 1.2, 0.5, 3);
 }
@@ -2971,10 +2979,10 @@ $('orderChip').onclick = guard(deliverOrder);
 $('miniChip').onclick = guard(() => { if (miniReady()) startMini(); else toast(T.mgWait.replace('{m}', Math.ceil(miniLeft() / 60))); });
 $('petChip').onclick = guard(() => { if (!S.pet) return;
   const fuera = S.pet.r !== S.cur ? ' · ' + T.petAway.replace('{r}', rName(S.pet.r)) : '';
-  toast(T.petInfo.replace('{n}', spName(S.pet.r, S.pet.lv)).replace('{p}', petPct()).replace('{c}', S.love || 0) + fuera); });
+  toast(T.petInfo.replace('{n}', spName(S.pet.r, S.pet.lv)).replace('{p}', petPct()).replace('{c}', petLove()) + fuera); });
 // mantener pulsado el chip suelta la mascota
 { let lp = null; const chip = $('petChip');
-  const start = () => { lp = setTimeout(() => { lp = null; if (S.pet) { S.pet = null; save(); applyText(); Snd.click(); buzz('med'); toast(T.petOff); } }, 650); };
+  const start = () => { lp = setTimeout(() => { lp = null; if (S.pet) { S.pet = null; save(); applyText(); Snd.click(); buzz('med'); toast(T.petOff); } }, 650); };   // el cariño de cada blob se conserva en S.loves
   const stop = () => { if (lp) { clearTimeout(lp); lp = null; } };
   chip.addEventListener('pointerdown', start); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => chip.addEventListener(t, stop)); }
 $('tAuto').onclick = guard(() => { S.autoOn = !S.autoOn; save(); applyText(); });
@@ -3072,7 +3080,7 @@ Ads.init().then(() => { if (isNative && Ads.ready && !S.noAds) { document.docume
 checkOffline(); save();
 if (!modal && dailyAvail() && S.total > 500) setTimeout(() => { if (!modal) openModal('daily'); }, 900);
 requestAnimationFrame(frame);
-window.__BL = {THEMES, robotMerge, startMini, endMini, stepMini, tapMini, miniReady, miniLeft, MINIS, mgPad, boxLevel, setPet, newOrder, deliverOrder, petPct, isPet, EVENTS, SKINS, skinSp, startEvent, tapEvent, T_EN, SPECIES, RANCHES, ACH, UPN, TIER_EN, GOD, LC, IAP, grantPack, renderDeep, rebirthM, PERKS, maxBuy, renderBShop, warpMerge, UPG, upL, uc, upAvail, labM, redeemCode, DEVACT, flyCoins, drawBlob, G, S, SP, mergeBlobs, buyBlob, openBox, totalIncome, price, buyLevel, UPG, upV, doPortal, portalGain, step, switchRanch, cur, RD, freeSlots, boxInterval};
+window.__BL = {THEMES, robotMerge, petLove, petKey, startMini, endMini, stepMini, tapMini, miniReady, miniLeft, MINIS, mgPad, boxLevel, setPet, newOrder, deliverOrder, petPct, isPet, EVENTS, SKINS, skinSp, startEvent, tapEvent, T_EN, SPECIES, RANCHES, ACH, UPN, TIER_EN, GOD, LC, IAP, grantPack, renderDeep, rebirthM, PERKS, maxBuy, renderBShop, warpMerge, UPG, upL, uc, upAvail, labM, redeemCode, DEVACT, flyCoins, drawBlob, G, S, SP, mergeBlobs, buyBlob, openBox, totalIncome, price, buyLevel, UPG, upV, doPortal, portalGain, step, switchRanch, cur, RD, freeSlots, boxInterval};
 
 })();
 </script>
