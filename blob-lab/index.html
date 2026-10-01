@@ -209,7 +209,8 @@ svg.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .btn.buy.cant{filter:saturate(.3) brightness(.8)}
 #buyIcon{width:44px;height:44px;flex:none}
 #bottom .dock{margin:0;width:min(440px,100%);justify-content:space-around}
-body.mgOn #bottom, body.mgOn #sideR, body.mgOn #tabs, body.mgOn #evBanner{opacity:0;pointer-events:none;transition:opacity .25s}
+body.mgOn #hud, body.mgOn #bottom, body.mgOn #sideR{opacity:0;visibility:hidden;transition:opacity .2s}
+body.mgOn #hud *, body.mgOn #bottom *, body.mgOn #sideR *{pointer-events:none!important}
 .chiprow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:min(440px,100%);order:3;min-height:0}
 .chiprow .side{height:30px;font-size:12px;padding:0 9px}
 .chiprow .side svg{width:14px;height:14px}
@@ -2214,7 +2215,7 @@ function step(dt) {
   for (const p of G.pops) { p.l -= dt * 0.9; p.y -= U * 0.9 * dt; }
   G.pops = G.pops.filter(p => p.l > 0);
   // cola de avisos (especie nueva, rancho nuevo)
-  if (G.queue.length && !modal) { const q = G.queue.shift(); if (q[0] === 'disc') showDiscovery(q[1], q[2]); else if (q[0] === 'ranch') showRanch(q[1]); else if (q[0] === 'deep') openModal('deep'); else toast(q[1]); }
+  if (G.queue.length && !modal && !G.mg) { const q = G.queue.shift(); if (q[0] === 'disc') showDiscovery(q[1], q[2]); else if (q[0] === 'ranch') showRanch(q[1]); else if (q[0] === 'deep') openModal('deep'); else toast(q[1]); }
   G.hudT -= dt; if (G.hudT <= 0) { G.hudT = 0.15; updHUD(); }
   G.saveT -= dt; if (G.saveT <= 0) { G.saveT = 5; syncSave(); }
 }
@@ -2594,6 +2595,7 @@ addEventListener('contextmenu', e => e.preventDefault());
 const MODALS = ['deep', 'bshop', 'upg', 'book', 'ach', 'shop', 'perks', 'disc', 'ranchNew', 'offline', 'daily', 'settings', 'noads'];
 let modal = null;
 function openModal(id) {
+  if (G.mg) return;   // nada de abrir tienda ni menús en mitad de un minijuego
   if (modal && modal !== id) $(modal).classList.remove('on');
   modal = id; $(id).classList.add('on');
   ({upg: renderUpg, book: renderBook, ach: renderAch, shop: renderShop, perks: renderPerks, daily: renderDaily, noads: updNoAdsUI, settings: renderSettings, bshop: renderBShop, deep: renderDeep}[id] || (() => {}))();
@@ -3047,7 +3049,7 @@ if (P.App) {
 if (isNative && P.StatusBar) P.StatusBar.hide().catch(() => {});
 function checkOffline() {
   const away = (Date.now() - (S.lastSeen || Date.now())) / 1000;
-  if (away < 60 || modal) return;
+  if (away < 60 || modal || G.mg) return;
   const secs = Math.min(away, upV('nap') * 3600), amt = totalIncome(false) * secs * 0.5 * (1 + 0.5 * pk('pOffline'));
   S.lastSeen = Date.now();
   if (amt > 0) { showOffline(amt, away); An.log('offline', {minutes: Math.round(away / 60)}); }
