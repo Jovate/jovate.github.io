@@ -1740,7 +1740,7 @@ function fmt(n) {
 }
 const UPG = [
   {k:'speed', only:0, es:'Incubadora rápida', en:'Fast incubator', dEs:'Una caja cada', dEn:'A box every', max:20, cost:l => 120 * Math.pow(3.1, l), val:l => l <= 12 ? 10 - 0.6 * l : 2.8 * Math.pow(0.9, l - 12), fmt:v => v.toFixed(1) + 's', ico:'⏱️'},
-  {k:'box', only:0, es:'Mejores cajas',     en:'Better boxes',   dEs:'Las cajas traen', dEn:'Boxes contain', max:10, cost:l => 3000 * Math.pow(12, l), val:l => 1 + l, fmt:v => `${T.lvl} ${v}`, ico:'📦'},
+  {k:'box', only:0, es:'Mejores cajas',     en:'Better boxes',   dEs:'Las cajas traen', dEn:'Boxes contain', max:9, cost:l => 3000 * Math.pow(12, l), val:l => 1 + l, fmt:v => `${T.lvl} ${v}`, ico:'📦'},
   {k:'lab',   es:'Laboratorio',       en:'Research lab',   dEs:'Ganancias', dEn:'Earnings', max:300, cost:l => 250 * Math.pow(2.6, l), val:l => 1 + 0.1 * l, fmt:v => 'x' + v.toFixed(1), ico:'🧪'},
   {k:'space', es:'Ampliar ranchos',   en:'Bigger ranches', dEs:'Capacidad', dEn:'Capacity', max:13, cost:l => 300 * Math.pow(3, l), val:l => 12 + l, fmt:v => `${v} blobs`, ico:'🏡'},
   {k:'tap',   es:'Caricias de oro',   en:'Golden pets',    dEs:'Acariciar un blob da', dEn:'Petting a blob gives', max:25, cost:l => 400 * Math.pow(3.4, l), val:l => 2 + l, fmt:v => `${v}s ${ES ? 'de ganancias' : tr('of earnings')}`, ico:'✋'},
@@ -1821,7 +1821,9 @@ const RD = r => S.ranches[r];
 const buyLevel = r => r ? maxBuy(r) : Math.max(1, RD(r).runMax - 4);
 // En la Granja salen cajas gratis; en los demás mundos solo se compra, así que ahí los blobs altos son más baratos
 const price = (r, lv) => S.dev ? 0 : (G.ev && G.ev.k === 'market' ? 0.5 : 1) * (r ? RB(r) * 90 : 6) * Math.pow(r ? 2.3 : 3.7, lv - 1) * Math.pow(r ? 1.08 : 1.2, RD(r).bought[lv] || 0) * (1 - upV('neon', r) / 100) * (1 - 0.08 * pk('pCheap'));
-const boxLevel = r => Math.max(1, Math.min(upV('box', r) + pk('pBox'), RD(r).runMax - 4));
+// el tope lo marca la mejora "Mejores cajas"; el límite por rancho sube de runMax-4 a runMax-2 para que la mejora
+// siga sirviendo hasta el final (antes se quedaba clavada en 8 con el mundo completo)
+const boxLevel = r => Math.max(1, Math.min(upV('box', r) + pk('pBox'), RD(r).runMax - 2, LVN - 2));
 const boxInterval = (r = S.cur) => upV('speed', r) * (1 - 0.1 * pk('pSpeed')) * (1 + 0.25 * r); // los ranchos avanzados incuban algo más lento
 const portalGainRaw = () => S.dev ? Math.max(10, S.runTotal < 1e5 ? 0 : Math.floor(3 * Math.pow(Math.log10(S.runTotal) - 5, 1.5))) : S.runTotal < 1e5 ? 0 : Math.floor(3 * Math.pow(Math.log10(S.runTotal) - 5, 1.5)); // crece con cada rancho, sin dispararse
 const portalGain = () => portalGainRaw() + (S.deep || S.dev ? 5 + 2 * S.prestiges : 0);
@@ -2086,7 +2088,9 @@ function openBox(ri, bx) {
   if (ri === S.cur) { burst(bx.x, bx.y, '#ffd23c', 16, U * 2.5, 0.5, 3); Snd.pu(); buzz('light'); }
   if (bx.lv > RD(ri).runMax) RD(ri).runMax = bx.lv;
 }
-const maxBuy = r => Math.max(1, Math.min(LVN - 1, RD(r).runMax - 2)); // se puede comprar hasta 2 niveles por debajo del mejor blob
+// se puede comprar hasta 2 niveles por debajo del mejor blob; al completar el mundo (nivel 12) se desbloquea también el 11,
+// que antes era imposible porque habría hecho falta un nivel 13 que no existe
+const maxBuy = r => { const m = RD(r).runMax || 1; return Math.max(1, Math.min(LVN - 1, m - 2 + (m >= LVN ? 1 : 0))); };
 function buyBlob(lvIn, riIn, auto) {
   const ri = riIn === undefined ? S.cur : riIn, lv = lvIn || buyLevel(ri), p = price(ri, lv), vis = ri === S.cur;
   if (lv > maxBuy(ri) && lv !== buyLevel(ri)) return;
@@ -2858,7 +2862,7 @@ Ads.init().then(() => { if (isNative && Ads.ready && !S.noAds) { document.docume
 checkOffline(); save();
 if (!modal && dailyAvail() && S.total > 500) setTimeout(() => { if (!modal) openModal('daily'); }, 900);
 requestAnimationFrame(frame);
-window.__BL = {THEMES, robotMerge, setPet, newOrder, deliverOrder, petPct, isPet, EVENTS, SKINS, skinSp, startEvent, tapEvent, T_EN, SPECIES, RANCHES, ACH, UPN, TIER_EN, GOD, LC, IAP, grantPack, renderDeep, rebirthM, PERKS, maxBuy, renderBShop, warpMerge, UPG, upL, uc, upAvail, labM, redeemCode, DEVACT, flyCoins, drawBlob, G, S, SP, mergeBlobs, buyBlob, openBox, totalIncome, price, buyLevel, UPG, upV, doPortal, portalGain, step, switchRanch, cur, RD, freeSlots, boxInterval};
+window.__BL = {THEMES, robotMerge, boxLevel, setPet, newOrder, deliverOrder, petPct, isPet, EVENTS, SKINS, skinSp, startEvent, tapEvent, T_EN, SPECIES, RANCHES, ACH, UPN, TIER_EN, GOD, LC, IAP, grantPack, renderDeep, rebirthM, PERKS, maxBuy, renderBShop, warpMerge, UPG, upL, uc, upAvail, labM, redeemCode, DEVACT, flyCoins, drawBlob, G, S, SP, mergeBlobs, buyBlob, openBox, totalIncome, price, buyLevel, UPG, upV, doPortal, portalGain, step, switchRanch, cur, RD, freeSlots, boxInterval};
 
 })();
 </script>
